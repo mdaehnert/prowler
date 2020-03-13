@@ -1,0 +1,212 @@
+#
+# Any code, applications, scripts, templates, proofs of concept, documentation
+# and other items provided by AWS under this SOW are "AWS Content," as defined
+# in the Agreement, and are provided for illustration purposes only. All such
+# AWS Content is provided solely at the option of AWS, and is subject to the
+# terms of the Addendum and the Agreement. Customer is solely responsible for
+# using, deploying, testing, and supporting any code and applications provided
+# by AWS under this SOW
+#
+AWSTemplateFormatVersion: 2010-09-09
+Description: Run Prowler on CodeBuild once a day
+
+
+Resources:
+  ProwlerBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "prowler-bucket-${AWS::AccountId}"
+
+
+  ProwlerExecutionCodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: prowler-execution
+      ServiceRole: !GetAtt ProwlerAuditRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:4.0
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                docker: 19
+            pre_build:
+              commands:
+                - echo "Downloading Prowler from Docker Hub"
+                - docker pull toniblyx/prowler:latest
+            build:
+              commands:
+              - echo "Downloading Prowler from Docker Hub"
+              - docker info
+              # - docker pull toniblyx/prowler:latest
+              # - echo "Execute Prowler"
+              # - docker run -ti --rm --name prowler toniblyx/prowler
+
+      # Triggers:
+      #   Webhook: true
+      #   FilterGroups:
+      #   - - Type: EVENT
+      #       Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED
+      #     - Type: BASE_REF
+      #       Pattern: ^refs/heads/master$
+      #       ExcludeMatchedPattern: false
+      #     - Type: ACTOR_ACCOUNT_ID
+      #       Pattern: 12345
+      #       ExcludeMatchedPattern: true
+      #   - - Type: EVENT
+      #       Pattern: PUSH
+      #     - Type: HEAD_REF
+      #       Pattern: ^refs/heads/.*
+      #     - Type: FILE_PATH
+      #       Pattern: READ_ME
+      #       ExcludeMatchedPattern: true
+
+
+  ProwlerAuditRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: prowler-audit-role
+      Path: /service-role/
+      MaxSessionDuration: 14400 # 4 Stunden
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codebuild.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Description: Prowler's required Audit policies to check security status of AWS account-
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/SecurityAudit
+      Policies:
+      - PolicyName: prowler-codebuild-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Resource:
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution:*"
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+      - PolicyName: prowler-security-audit-addition-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Resource: "*"
+            Action:
+              - access-analyzer:List
+              - apigateway:get
+              - apigatewayv2:get
+              - aws-marketplace:viewsubscriptions
+              - batch:listjobs
+              - clouddirectory:listappliedschemaarns
+              - clouddirectory:listdevelopmentschemaarns
+              - clouddirectory:listpublishedschemaarns
+              - cloudformation:list
+              - cloudhsm:listavailablezones
+              - cloudsearch:list
+              - cloudwatch:get
+              - cloudwatch:list
+              - codebuild:listbuilds
+              - codestar:verify
+              - cognito-identity:listidentities
+              - cognito-idp:list
+              - cognito-sync:listdatasets
+              - connect:list
+              - datapipeline:getaccountlimits
+              - dax:describeclusters
+              - dax:describedefaultparameters
+              - dax:describeevents
+              - dax:describeparametergroups
+              - dax:describeparameters
+              - dax:describesubnetgroups
+              - dax:describetable
+              - dax:listtables
+              - devicefarm:list
+              - discovery:list
+              - dms:list
+              - ds:ListAuthorizedApplications
+              - ds:DescribeRoles
+              - dynamodb:describebackup
+              - dynamodb:describeglobaltablesettings
+              - dynamodb:describelimits
+              - dynamodb:describereservedcapacity
+              - dynamodb:describereservedcapacityofferings
+              - dynamodb:describestream
+              - dynamodb:listtagsofresource
+              - ec2:get
+              - ecr:describe
+              - ecr:listimages
+              - elasticbeanstalk:listavailablesolutionstacks
+              - elasticmapreduce:list
+              - elastictranscoder:list
+              - gamelift:list
+              - glacier:list
+              - importexport:listjobs
+              - lambda:GetAccountSettings
+              - lambda:GetFunctionConfiguration
+              - lambda:GetLayerVersionPolicy
+              - lambda:GetPolicy
+              - lambda:List
+              - lex:getbotaliases
+              - lex:getbotchannelassociations
+              - lex:getbots
+              - lex:getbotversions
+              - lex:getintents
+              - lex:getintentversions
+              - lex:getslottypes
+              - lex:getslottypeversions
+              - lex:getutterancesview
+              - lightsail:getblueprints
+              - lightsail:getbundles
+              - lightsail:getinstancesnapshots
+              - lightsail:getkeypair
+              - lightsail:getregions
+              - lightsail:getstaticips
+              - lightsail:isvpcpeered
+              - machinelearning:describe
+              - mobilehub:listavailablefeatures
+              - mobilehub:listavailableregions
+              - mobilehub:listprojects
+              - mobiletargeting:getapplicationsettings
+              - mobiletargeting:getcampaigns
+              - mobiletargeting:getimportjobs
+              - mobiletargeting:getsegments
+              - opsworks-cm:describe
+              - opsworks:describe
+              - polly:describe
+              - polly:list
+              - redshift:viewqueriesinconsole
+              - route53domains:list
+              - s3:listbucket
+              - sdb:list
+              - secretsmanager:listsecretversionids
+              - servicecatalog:list
+              - ses:list
+              - ses:sendemail
+              - sns:list
+              - sqs:listqueuetags
+              - ssm:listassociations
+              - states:listactivities
+              - support:describe
+              - swf:list
+              - tag:gettagkeys
+              - trustedadvisor:describe
+              - waf-regional:list
+              - waf:list
+              - workdocs:describeavailabledirectories
+              - workdocs:describeinstances
+              - workmail:describe
