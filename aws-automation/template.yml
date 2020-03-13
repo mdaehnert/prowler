@@ -10,6 +10,10 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Run Prowler on CodeBuild once a day
 
+# TODOs:
+# * CloudWatch-CRON-Scheduler (Parameter)
+# * Multi-Account setup (a. StackSets, b. Lambda legt Rollen in Accounts an.)
+# * Doku: One-time execution + remove
 
 Resources:
   ProwlerReportBucket:
