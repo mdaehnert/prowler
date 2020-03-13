@@ -12,10 +12,10 @@ Description: Run Prowler on CodeBuild once a day
 
 
 Resources:
-  ProwlerBucket:
+  ProwlerReportBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "prowler-bucket-${AWS::AccountId}"
+      BucketName: !Sub "prowler-reports-${AWS::AccountId}"
 
 
   ProwlerExecutionCodeBuild:
@@ -32,7 +32,7 @@ Resources:
         Image: toniblyx/prowler:latest
       Source:
         Type: NO_SOURCE
-        BuildSpec: |
+        BuildSpec: !Sub |
           version: 0.2
           phases:
             install:
@@ -41,7 +41,9 @@ Resources:
             build:
               commands:
               - cd /prowler/
-              - ./prowler
+              - execution_datetime=`date +%Y-%m-%d_%H-%M-%S`
+              - ./prowler | ansi2html -la > report.html
+              - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!execution_datetime}_prowler_report.html
 
 
   ProwlerAuditRole:
@@ -68,13 +70,22 @@ Resources:
           Version: 2012-10-17
           Statement:
           - Effect: Allow
-            Resource:
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution:*"
             Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
+            Resource:
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution:*"
+      - PolicyName: prowler-report-storage
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:PutObject
+            Resource:
+            - !Sub "${ProwlerReportBucket.Arn}/*"
       - PolicyName: prowler-security-audit-addition-policy
         PolicyDocument:
           Version: 2012-10-17
