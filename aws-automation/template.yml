@@ -28,7 +28,8 @@ Resources:
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:4.0
+        # https://hub.docker.com/r/toniblyx/prowler
+        Image: toniblyx/prowler:latest
       Source:
         Type: NO_SOURCE
         BuildSpec: |
@@ -37,36 +38,10 @@ Resources:
             install:
               runtime-versions:
                 docker: 19
-            pre_build:
-              commands:
-                - echo "Downloading Prowler from Docker Hub"
-                - docker pull toniblyx/prowler:latest
             build:
               commands:
-              - echo "Downloading Prowler from Docker Hub"
-              - docker info
-              # - docker pull toniblyx/prowler:latest
-              # - echo "Execute Prowler"
-              # - docker run -ti --rm --name prowler toniblyx/prowler
-
-      # Triggers:
-      #   Webhook: true
-      #   FilterGroups:
-      #   - - Type: EVENT
-      #       Pattern: PULL_REQUEST_CREATED,PULL_REQUEST_UPDATED
-      #     - Type: BASE_REF
-      #       Pattern: ^refs/heads/master$
-      #       ExcludeMatchedPattern: false
-      #     - Type: ACTOR_ACCOUNT_ID
-      #       Pattern: 12345
-      #       ExcludeMatchedPattern: true
-      #   - - Type: EVENT
-      #       Pattern: PUSH
-      #     - Type: HEAD_REF
-      #       Pattern: ^refs/heads/.*
-      #     - Type: FILE_PATH
-      #       Pattern: READ_ME
-      #       ExcludeMatchedPattern: true
+              - cd /prowler/
+              - ./prowler
 
 
   ProwlerAuditRole:
