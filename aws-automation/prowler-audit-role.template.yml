@@ -8,88 +8,37 @@
 # by AWS under this SOW
 #
 AWSTemplateFormatVersion: 2010-09-09
-Description: Run Prowler on CodeBuild once a day
+Description: Create prowler Role inside an account.
 
-# TODOs:
-# * CloudWatch-CRON-Scheduler (Parameter)
-# * Multi-Account setup (a. StackSets, b. Lambda legt Rollen in Accounts an.)
-# * Doku: One-time execution + remove
+Parameters:
+  AutomationAccountId:
+    Type: String
+    Description: Name Account ID from where prowler will be executed and assume the required role.
+    AllowedPattern: \d{12}
+  ProwlerAuditRoleName:
+    Type: String
+    Description: Name for prowlers audit role. Needs to be defined as cross-account usage of prowler requires this.
+
 
 Resources:
-  ProwlerReportBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "prowler-reports-${AWS::AccountId}"
-
-
-  ProwlerExecutionCodeBuild:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: prowler-execution
-      ServiceRole: !GetAtt ProwlerAuditRole.Arn
-      Artifacts:
-        Type: NO_ARTIFACTS
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # https://hub.docker.com/r/toniblyx/prowler
-        Image: toniblyx/prowler:latest
-      Source:
-        Type: NO_SOURCE
-        BuildSpec: !Sub |
-          version: 0.2
-          phases:
-            install:
-              runtime-versions:
-                docker: 19
-            build:
-              commands:
-              - cd /prowler/
-              - execution_datetime=`date +%Y-%m-%d_%H-%M-%S`
-              - ./prowler | ansi2html -la > report.html
-              - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!execution_datetime}_${AWS::AccountId}_prowler_report.html
-
-
   ProwlerAuditRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: prowler-audit-role
-      Path: /service-role/
-      MaxSessionDuration: 14400 # 4 Stunden
+      RoleName: !Ref ProwlerAuditRoleName
+      Path: /
+      Description: Prowler's required Audit policies to check security status of AWS account.
+      MaxSessionDuration: 14400 # 4 hours
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
         - Effect: Allow
           Principal:
-            Service:
-            - codebuild.amazonaws.com
+            AWS: !Ref AutomationAccountId
           Action:
           - sts:AssumeRole
-      Description: Prowler's required Audit policies to check security status of AWS account-
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/SecurityAudit
       Policies:
-      - PolicyName: prowler-codebuild-policy
-        PolicyDocument:
-          Version: 2012-10-17
-          Statement:
-          - Effect: Allow
-            Action:
-            - logs:CreateLogGroup
-            - logs:CreateLogStream
-            - logs:PutLogEvents
-            Resource:
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution:*"
-      - PolicyName: prowler-report-storage
-        PolicyDocument:
-          Version: 2012-10-17
-          Statement:
-          - Effect: Allow
-            Action:
-            - s3:PutObject
-            Resource:
-            - !Sub "${ProwlerReportBucket.Arn}/*"
       - PolicyName: prowler-security-audit-addition-policy
         PolicyDocument:
           Version: 2012-10-17

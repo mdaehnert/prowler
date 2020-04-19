@@ -1,0 +1,232 @@
+#
+# Any code, applications, scripts, templates, proofs of concept, documentation
+# and other items provided by AWS under this SOW are "AWS Content," as defined
+# in the Agreement, and are provided for illustration purposes only. All such
+# AWS Content is provided solely at the option of AWS, and is subject to the
+# terms of the Addendum and the Agreement. Customer is solely responsible for
+# using, deploying, testing, and supporting any code and applications provided
+# by AWS under this SOW
+#
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Run Prowler on CodeBuild
+
+# TODOs:
+# * CloudWatch-CRON-Scheduler (Parameter)?
+# * Multi-Account setup (a. StackSets, b. Lambda legt Rollen in Accounts an.)
+# * Doku: One-time execution + remove
+# * HTML and other outputs as parameter
+# * Execute prowler-additions as well
+
+Globals:
+  Function:
+    Runtime: python3.8
+    Timeout: 60
+    MemorySize: 256
+    Handler: index.handler
+
+
+Parameters:
+  ProwlerCrossAccountAuditRoleName:
+    Type: String
+    Description: Name of prowler-audit-role inside accounts to lookup. This role is filtering access rights of prowler inside build run.
+
+
+Resources:
+  ProwlerReportBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "prowler-reports-${AWS::AccountId}"
+
+
+  StartProwlerExecutionLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: prowler-automation-start-execution
+      CodeUri: ./lambda/01_start_execution/
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action: codebuild:StartBuild
+          Resource: !GetAtt ProwlerExecutionCodeBuild.Arn
+      Environment:
+        Variables:
+          CodeBuildProjectName: !Ref ProwlerExecutionCodeBuild
+
+  CheckProwlerExecutionStatusLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: prowler-automation-check-execution-status
+      CodeUri: ./lambda/02_check_execution_status/
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action: codebuild:BatchGetBuilds
+          Resource: !GetAtt ProwlerExecutionCodeBuild.Arn
+      Environment:
+        Variables:
+          CodeBuildProjectName: !Ref ProwlerExecutionCodeBuild
+
+  ProwlerStepFunctionLooper:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: prowler-execution
+      RoleArn: !GetAtt ProwlerDeploymentStateMachineRole.Arn
+      DefinitionString: !Sub |
+        {
+          "StartAt": "ProcessAllItems",
+          "States": {
+            "ProcessAllItems": {
+              "Type": "Map",
+              "ItemsPath": "$",
+              "MaxConcurrency": 10,
+              "End": true,
+              "Iterator": {
+                "StartAt": "Start prowler CodeBuild execution",
+                "States": {
+                  "Start prowler CodeBuild execution": {
+                    "Type": "Task",
+                    "Resource": "${StartProwlerExecutionLambda.Arn}",
+                    "Next": "Prowler execution - Wait for 30 sec"
+                  },
+                  "Prowler execution - Wait for 30 sec": {
+                    "Type": "Wait",
+                    "Seconds": 30,
+                    "Next": "Check if prowler execution finished"
+                  },
+                  "Check if prowler execution finished": {
+                    "Type": "Task",
+                    "Resource": "${CheckProwlerExecutionStatusLambda.Arn}",
+                    "ResultPath": "$.ExecutionCheck",
+                    "Next": "Prowler execution complete?"
+                  },
+                  "Prowler execution complete?": {
+                    "Type": "Choice",
+                    "Choices": [
+                    {
+                      "Variable": "$.ExecutionCheck.Status",
+                      "StringEquals": "Pending",
+                      "Next": "Prowler execution - Wait for 30 sec"
+                    },
+                    {
+                      "Variable": "$.ExecutionCheck.Status",
+                      "StringEquals": "Success",
+                      "Next": "Prowler execution succeeded"
+                    }
+                    ],
+                    "Default": "Prowler execution failed"
+                  },
+                  "Prowler execution succeeded": {
+                    "Type": "Succeed"
+                  },
+                  "Prowler execution failed": {
+                    "Type": "Fail",
+                    "Error": "Prowler execution throw some error.",
+                    "Cause": " Please see CodeBuild execution logs for details."
+                  }
+                }
+              }
+            }
+          }
+        }
+
+
+  ProwlerExecutionCodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: prowler-execution
+      ServiceRole: !GetAtt ProwlerBuildAssumeRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # https://hub.docker.com/r/toniblyx/prowler
+        Image: toniblyx/prowler:latest
+        EnvironmentVariables:
+        - Name: RUNNING_ACCOUNT_ID
+          Value: !Ref AWS::AccountId
+          Type: PLAINTEXT
+        - Name: PROWLER_ROLE_NAME
+          Value: !Ref ProwlerCrossAccountAuditRoleName
+          Type: PLAINTEXT
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                docker: 19
+            build:
+              commands:
+              - cd /prowler/
+              - exec_datetime_path=`date +%Y/%m/%d/%H-%M-%S`
+              - ./prowler -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
+              - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!RUNNING_ACCOUNT_ID}/${!exec_datetime_path}_prowler_report.html
+
+
+  ProwlerDeploymentStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: prowler-automation-step-functions-role
+      Path: /service-role/
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: !Sub "states.${AWS::Region}.amazonaws.com"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Action: lambda:InvokeFunction
+            Effect: Allow
+            Resource:
+            - !GetAtt StartProwlerExecutionLambda.Arn
+            - !GetAtt CheckProwlerExecutionStatusLambda.Arn
+
+
+  ProwlerBuildAssumeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: prowler-automation-codebuild-role
+      Path: /service-role/
+      Description: Allow Prolwer to assume-role with specific name.
+      MaxSessionDuration: 14400 # 4 Stunden
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: prowler-cross-account-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: !Sub "arn:${AWS::Partition}:iam::*:role/${ProwlerCrossAccountAuditRoleName}"
+      - PolicyName: codebuild-logging-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution"
+            - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prowler-execution:*"
+      - PolicyName: prowler-report-storage
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action: s3:PutObject
+            Resource: !Sub "${ProwlerReportBucket.Arn}/*"
