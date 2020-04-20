@@ -31,13 +31,84 @@ Parameters:
     Type: String
     Description: Name of prowler-audit-role inside accounts to lookup. This role is filtering access rights of prowler inside build run.
 
+  DoRunProwlerRegularly:
+    Type: String
+    Description: Define whether prowler shall be executed manually or a CloudWatch Cron rule will be handling it on a scheduled basis.
+    AllowedValues: [true, false]
+  ProwlerRunCronExpression:
+    Type: String
+    Default: ""
+    Description: |
+      If prowler shall run on a regularly basis, then fill this with a cron expression.
+      @see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html
+      e.g. "0 12 * * ? *"
+
+
+Conditions:
+  RunProwlerRegularly: !Equals [!Ref DoRunProwlerRegularly, true]
+
+
 
 Resources:
+
+##########
+# Feature: Save Prowler reports to a dedicated S3 bucket.
+##########
+
   ProwlerReportBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "prowler-reports-${AWS::AccountId}"
 
+
+##########
+# Feature: Run prowler on a scheduled basis
+##########
+
+  ProwlerExecutionEventRule:
+    Condition: RunProwlerRegularly
+    Type: AWS::Events::Rule
+    Properties:
+      Name: prowler-scheduled-execution
+      Description: Run Prowler on a scheduled basis.
+      State: ENABLED
+      ScheduleExpression: !Sub "cron(${ProwlerRunCronExpression})"
+      Targets:
+      - Arn: !Ref ProwlerStepFunctionLooper
+        RoleArn: !GetAtt ProwlerExecutionEventRole.Arn
+        Id: prowler-run-looper
+        Input: !Sub |
+          {
+            "Accounts": [
+              {"AccountId": "${AWS::AccountId}"}
+            ]
+          }
+
+  ProwlerExecutionEventRole:
+    Condition: RunProwlerRegularly
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: prowler-execution-event-role
+      Path: /service-role/
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: events.amazonaws.com
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action: states:StartExecution
+            Resource: !Ref ProwlerStepFunctionLooper
+
+
+##########
+# Feature: Prowler Step Function to handle parallel execution of runs inside multiple accounts.
+##########
 
   StartProwlerExecutionLambda:
     Type: AWS::Serverless::Function
@@ -138,6 +209,10 @@ Resources:
         }
 
 
+##########
+# Feature: Prowler run of it's docker image inside AWS CodeBuild.
+##########
+
   ProwlerExecutionCodeBuild:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -167,11 +242,12 @@ Resources:
                 docker: 19
             build:
               commands:
-              - cd /prowler/
-              - echo Execution prowler for $RUNNING_ACCOUNT_ID and rolename $PROWLER_ROLE_NAME
-              - exec_datetime_path=`date +%Y/%m/%d/%H-%M-%S`
-              - ./prowler -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
-              - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!RUNNING_ACCOUNT_ID}/${!exec_datetime_path}_prowler_report.html
+              - echo $RUNNING_ACCOUNT_ID $PROWLER_ROLE_NAME
+#              - cd /prowler/
+#              - echo Execution prowler for $RUNNING_ACCOUNT_ID and rolename $PROWLER_ROLE_NAME
+#              - exec_datetime_path=`date +%Y/%m/%d/%H-%M-%S`
+#              - ./prowler -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
+#              - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!RUNNING_ACCOUNT_ID}/${!exec_datetime_path}_prowler_report.html
 
 
   ProwlerDeploymentStateMachineRole:
