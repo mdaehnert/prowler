@@ -12,8 +12,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Run Prowler on CodeBuild
 
 # TODOs:
-# * CloudWatch-CRON-Scheduler (Parameter)?
-# * Multi-Account setup (a. StackSets, b. Lambda legt Rollen in Accounts an.)
 # * Doku: One-time execution + remove
 # * HTML and other outputs as parameter
 # * Execute prowler-additions as well
