@@ -243,7 +243,7 @@ Resources:
               - cd /prowler/
               - echo Execution prowler for $RUNNING_ACCOUNT_ID and rolename $PROWLER_ROLE_NAME
               - exec_datetime_path=`date +%Y/%m/%d/%H-%M-%S`
-              - ./prowler -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
+              - ./prowler -g extras -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
               - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!RUNNING_ACCOUNT_ID}/${!exec_datetime_path}_prowler_report.html
 
 
