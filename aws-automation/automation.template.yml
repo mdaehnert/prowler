@@ -78,7 +78,7 @@ Resources:
           "States": {
             "ProcessAllItems": {
               "Type": "Map",
-              "ItemsPath": "$",
+              "ItemsPath": "$.Accounts",
               "MaxConcurrency": 10,
               "End": true,
               "Iterator": {
@@ -87,6 +87,10 @@ Resources:
                   "Start prowler CodeBuild execution": {
                     "Type": "Task",
                     "Resource": "${StartProwlerExecutionLambda.Arn}",
+                    "Parameters": {
+                      "AccountId.$": "$.AccountId"
+                    },
+                    "ResultPath": "$.Execution",
                     "Next": "Prowler execution - Wait for 30 sec"
                   },
                   "Prowler execution - Wait for 30 sec": {
@@ -97,6 +101,9 @@ Resources:
                   "Check if prowler execution finished": {
                     "Type": "Task",
                     "Resource": "${CheckProwlerExecutionStatusLambda.Arn}",
+                    "Parameters": {
+                      "BuildId.$": "$.Execution.BuildId"
+                    },
                     "ResultPath": "$.ExecutionCheck",
                     "Next": "Prowler execution complete?"
                   },
@@ -105,12 +112,12 @@ Resources:
                     "Choices": [
                     {
                       "Variable": "$.ExecutionCheck.Status",
-                      "StringEquals": "Pending",
+                      "StringEquals": "IN_PROGRESS",
                       "Next": "Prowler execution - Wait for 30 sec"
                     },
                     {
                       "Variable": "$.ExecutionCheck.Status",
-                      "StringEquals": "Success",
+                      "StringEquals": "SUCCEEDED",
                       "Next": "Prowler execution succeeded"
                     }
                     ],
@@ -161,6 +168,7 @@ Resources:
             build:
               commands:
               - cd /prowler/
+              - echo Execution prowler for $RUNNING_ACCOUNT_ID and rolename $PROWLER_ROLE_NAME
               - exec_datetime_path=`date +%Y/%m/%d/%H-%M-%S`
               - ./prowler -A $RUNNING_ACCOUNT_ID -R $PROWLER_ROLE_NAME | ansi2html -la > report.html
               - aws s3 cp ./report.html s3://${ProwlerReportBucket}/${!RUNNING_ACCOUNT_ID}/${!exec_datetime_path}_prowler_report.html

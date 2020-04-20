@@ -9,5 +9,19 @@
 #
 import boto3
 
+
+codebuild = boto3.client("codebuild")
+
+
 def handler(event, context):
-    pass
+    print(event)
+
+    build_id = event["BuildId"]
+
+    build = codebuild.batch_get_builds(
+        ids=[build_id]
+    )["builds"][0]
+
+    return {
+        "Status": build["buildStatus"]
+    }

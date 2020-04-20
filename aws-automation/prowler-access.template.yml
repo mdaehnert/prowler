@@ -17,7 +17,7 @@ Parameters:
     AllowedPattern: \d{12}
   ProwlerAuditRoleName:
     Type: String
-    Description: Name for prowlers audit role. Needs to be defined as cross-account usage of prowler requires this.
+    Description: Name for prowlers audit role. (e.g. 'prowler-audit-role') Needs to be defined as cross-account usage of prowler requires a well known name of IAM role to assume.
 
 
 Resources:

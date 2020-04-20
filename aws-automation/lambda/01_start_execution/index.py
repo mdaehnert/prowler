@@ -15,16 +15,16 @@ codebuild = boto3.client("codebuild")
 
 
 def handler(event, context):
-    account_id = event["AccountId"]
+    print(event)
 
-    build_reponse = codebuild.start_build(
+    build_response = codebuild.start_build(
         projectName=os.environ["CodeBuildProjectName"],
         environmentVariablesOverride=[{
             "name": "RUNNING_ACCOUNT_ID",
-            "value": account_id
+            "value": event["AccountId"]
         }]
     )
 
     return {
-        "BuildId": build_reponse["build"]["id"]
+        "BuildId": build_response["build"]["id"]
     }
