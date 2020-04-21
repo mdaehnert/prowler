@@ -53,6 +53,7 @@ Resources:
 ##########
 
   ProwlerReportBucket:
+    DeletionPolicy: Retain
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "prowler-reports-${AWS::AccountId}"
