@@ -9,12 +9,11 @@
 #
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
-Description: Run Prowler on CodeBuild
+Description: |
+  Execute Prowler in an automated way via CodeBuild (single run),
+  Step Functions (multiple accounts in parallel)
+  and (optional) on a scheduled basis via CloudWatch Events.
 
-# TODOs:
-# * Doku: One-time execution + remove
-# * HTML and other outputs as parameter
-# * Execute prowler-additions as well
 
 Globals:
   Function:
@@ -27,7 +26,7 @@ Globals:
 Parameters:
   ProwlerCrossAccountAuditRoleName:
     Type: String
-    Description: Name of prowler-audit-role inside accounts to lookup. This role is filtering access rights of prowler inside build run.
+    Description: Name of prowler-audit-role inside accounts to lookup.
 
   DoRunProwlerRegularly:
     Type: String

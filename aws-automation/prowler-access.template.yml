@@ -13,7 +13,7 @@ Description: Create prowler Role inside an account.
 Parameters:
   AutomationAccountId:
     Type: String
-    Description: Name Account ID from where prowler will be executed and assume the required role.
+    Description: Name Account ID from where prowler will be executed.
     AllowedPattern: \d{12}
   ProwlerAuditRoleName:
     Type: String
