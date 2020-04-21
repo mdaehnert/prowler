@@ -11,6 +11,9 @@ These features will be installed via two CloudFormation stacks:
 1. prowler-access - Every account where prowler shall scan running resources needs to have this CloudFormation stack installed (includes an IAM role for cross-account access)
 2. prowler-automation - This stack sets up the automation for running prowler in an AWS accoount (includes CodeBuild/StepFunctions/CloudWatch rule).
 
+![Architecture](./_doc/architecture.png)
+
+
 # Install prowler role inside account(s)
 
 ```sh
