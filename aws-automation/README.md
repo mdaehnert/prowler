@@ -56,7 +56,9 @@ Parameters:
 
 # Execution
 
-## via CodeBuild
+In the architecture diagram above are three options mentioned (grey boxes). These are the execution options for prowler-automation.
+
+## via CodeBuild - option (1)
 
 Execution of a single prowler run can be started via CodeBuild project named _prowler-execution_.
 
@@ -66,7 +68,7 @@ Parameters are:
 
 ![Codebuild run](./_doc/codebuild_execution.png)
 
-## via Step Functions
+## via Step Functions - option (2)
 
 Step Functions can also be called directly. They feature a parallel execution of prowler instances (via CodeBuild).
 The name of the Step Function is _prowler-execution_.
@@ -85,7 +87,7 @@ To run the Step Function you need to enter the following input data like this:
 ![StepFunctions run](./_doc/automation-step_function.png)
 
 
-## via CloudWatch Scheduled Event
+## via CloudWatch Scheduled Event - option (3)
 
 Execution of a Prowler on a regular (scheduled) basis is also possible. To activate this feature you need to:
 1. Define DoRunProwlerRegularly=true on the prowler automation CFN stack
