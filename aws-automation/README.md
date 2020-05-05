@@ -11,6 +11,7 @@ To install this feature you need to:
 1. Checkout this folder. It doesn't require any of the other prowler repository folders to run.
 2. Have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) locally installed and configured.
 
+# Architecture
 
 Prowler automation features will be set up by two CloudFormation stacks:
 1. prowler-automation - This stack sets up the automation for running prowler in an AWS account (includes CodeBuild/StepFunctions/CloudWatch rule).
