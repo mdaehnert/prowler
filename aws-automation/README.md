@@ -7,7 +7,12 @@ Therefore this automation delivers the following features:
 * Run prowler on a regular (scheduled) basis (CloudWatch rule).
 * Save prowler execution results as html output on a dedicated S3 bucket.
 
-These features will be installed via two CloudFormation stacks:
+To install this feature you need to:
+1. Checkout this folder. It doesn't require any of the other prowler repository folders to run.
+2. Have [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html) locally installed and configured.
+
+
+Prowler automation features will be set up by two CloudFormation stacks:
 1. prowler-automation - This stack sets up the automation for running prowler in an AWS account (includes CodeBuild/StepFunctions/CloudWatch rule).
 2. prowler-access - Every account where prowler shall scan running resources needs to have this CloudFormation stack installed (includes an IAM role for cross-account access)
 
@@ -15,10 +20,23 @@ These features will be installed via two CloudFormation stacks:
 
 # Setup prowler automation
 
+| Parameter                        | Description                                                                                                                                                                          | Example                            |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+| LambdaArtifactbucketName         | Cloudformation package requires an S3 bucket to place the CloudFormation template and Lambdas before deployment. Can be any S3 bucket within your account. No special ACL required.  | cf-templates-abc123-eu-central-1   |
+| ProwlerCrossAccountAuditRoleName | Name of assumable role for prowler inside accounts.                                                                                                                                  | prowler-audit-role                 |
+| DoRunProwlerRegularly            | Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).                                                                   | true\|false                        |
+| ProwlerRunCronExpression         | If _DoRunProwlerRegularly_ is _true_, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html). | "0 12 * * ? *" (12:00pm every day) |
+
+
 ```sh
+LambdaArtifactbucketName=...
+ProwlerCrossAccountAuditRoleName=...
+DoRunProwlerRegularly=...
+ProwlerRunCronExpression=...
+
 aws cloudformation package \
   --template-file automation.template.yml \
-  --s3-bucket LAMBDA_ARTIFACT_BUCKETNAME \
+  --s3-bucket $LambdaArtifactbucketName \
   --output-template-file .packaged-automation.template.yml \
 && \
 aws cloudformation deploy \
@@ -26,33 +44,33 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --stack-name prowler-automation \
   --parameter-overrides \
-      ProwlerCrossAccountAuditRoleName=prowler-audit-role \
-      DoRunProwlerRegularly=true|false \
-      ProwlerRunCronExpression=...
+      ProwlerCrossAccountAuditRoleName=$ProwlerCrossAccountAuditRoleName \
+      DoRunProwlerRegularly=$DoRunProwlerRegularly \
+      ProwlerRunCronExpression=$ProwlerRunCronExpression
 
 ```
 
 Parameters:
-* ProwlerCrossAccountAuditRoleName - Name of prowler-audit-role inside accounts to lookup.
-* DoRunProwlerRegularly - (value: true|false) Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).
-* ProwlerRunCronExpression - If _DoRunProwlerRegularly_ is true, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html).
-  (e.g. "0 12 * * ? *")
 
 # Install prowler role inside account(s)
 
+| Parameter            | Description                                                                | Example                               |
+|----------------------|----------------------------------------------------------------------------|---------------------------------------|
+| AutomationAccountId  | Account ID from where prowler will be executed.                            | StartFragment123456789012 EndFragment |
+| ProwlerAuditRoleName | Name for prowlers audit role. Which will be assumed by prowler automation. | prowler-audit-role                    |
+
 ```sh
+AutomationAccountId=...
+ProwlerAuditRole=...
+
 aws cloudformation deploy \
   --template-file prowler-access.template.yml \
   --capabilities CAPABILITY_NAMED_IAM \
   --stack-name prowler-access \
   --parameter-overrides \
-      AutomationAccountId=123456789012 \
-      ProwlerAuditRoleName=prowler-audit-role
+      AutomationAccountId=$AutomationAccountId \
+      ProwlerAuditRoleName=$ProwlerAuditRole
 ```
-
-Parameters:
-* AutomationAccountId - Account ID from where prowler will be executed.
-* ProwlerAuditRoleName - Name for prowlers audit role. (e.g. 'prowler-audit-role') Needs to be defined as cross-account usage of prowler requires a well known name of IAM role to assume.
 
 # Execution
 
