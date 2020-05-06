@@ -21,12 +21,12 @@ Prowler automation features will be set up by two CloudFormation stacks:
 
 # Setup prowler automation
 
-| Parameter                        | Description                                                                                                                                                                          | Example                            |
-|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
-| LambdaArtifactbucketName         | Cloudformation package requires an S3 bucket to place the CloudFormation template and Lambdas before deployment. Can be any S3 bucket within your account. No special ACL required.  | cf-templates-abc123-eu-central-1   |
-| ProwlerCrossAccountAuditRoleName | Name of assumable role for prowler inside accounts.                                                                                                                                  | prowler-audit-role                 |
-| DoRunProwlerRegularly            | Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).                                                                   | true\|false                        |
-| ProwlerRunCronExpression         | If _DoRunProwlerRegularly_ is _true_, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html). | "0 12 * * ? *" (12:00pm every day) |
+| Parameter                        | Description                                                                                                                                                                                                                                                       | Example                            |
+|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+| LambdaArtifactbucketName         | Cloudformation package requires an S3 bucket to place the CloudFormation template and Lambdas before deployment. Can be any S3 bucket within your account but must belong to the same region where you want to setup prowler-automation. No special ACL required. | cf-templates-abc123-eu-central-1   |
+| ProwlerCrossAccountAuditRoleName | Name of assumable role for prowler inside accounts.                                                                                                                                                                                                               | prowler-audit-role                 |
+| DoRunProwlerRegularly            | Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).                                                                                                                                                | true\|false                        |
+| ProwlerRunCronExpression         | If _DoRunProwlerRegularly_ is _true_, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html).                                                                              | "0 12 * * ? *" (12:00pm every day) |
 
 
 ```sh
@@ -48,7 +48,6 @@ aws cloudformation deploy \
       ProwlerCrossAccountAuditRoleName=$ProwlerCrossAccountAuditRoleName \
       DoRunProwlerRegularly=$DoRunProwlerRegularly \
       ProwlerRunCronExpression=$ProwlerRunCronExpression
-
 ```
 
 Parameters:
