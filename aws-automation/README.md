@@ -14,32 +14,25 @@ To install this feature you need to:
 # Architecture
 
 Prowler automation features will be set up by two CloudFormation stacks:
-1. prowler-automation - This stack sets up the automation for running prowler in an AWS account (includes CodeBuild/StepFunctions/CloudWatch rule).
-2. prowler-access - Every account where prowler shall scan running resources needs to have this CloudFormation stack installed (includes an IAM role for cross-account access)
+1. _prowler-automation_ - This stack sets up the automation for running prowler in an AWS account (includes CodeBuild/StepFunctions/CloudWatch rule).
+2. _prowler-access_ - Every account where prowler shall scan running resources needs to have this CloudFormation stack installed (includes an IAM role for cross-account access)
 
 ![Architecture](./_doc/architecture.png)
 
 # Setup prowler automation
 
-| Parameter                        | Description                                                                                                                                                                                                                                                       | Example                            |
-|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
-| LambdaArtifactbucketName         | Cloudformation package requires an S3 bucket to place the CloudFormation template and Lambdas before deployment. Can be any S3 bucket within your account but must belong to the same region where you want to setup prowler-automation. No special ACL required. | cf-templates-abc123-eu-central-1   |
-| ProwlerCrossAccountAuditRoleName | Name of assumable role for prowler inside accounts.                                                                                                                                                                                                               | prowler-audit-role                 |
-| DoRunProwlerRegularly            | Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).                                                                                                                                                | true\|false                        |
-| ProwlerRunCronExpression         | If _DoRunProwlerRegularly_ is _true_, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html).                                                                              | "0 12 * * ? *" (12:00pm every day) |
+| Parameter                        | Description                                                                                                                                                                          | Example                            |
+|----------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+| ProwlerCrossAccountAuditRoleName | Name of assumable role for prowler inside accounts.                                                                                                                                  | prowler-audit-role                 |
+| DoRunProwlerRegularly            | Define whether prowler shall be executed via CloudWatch Cron rule on a scheduled basis (true) or manually (false).                                                                   | _true_ or _false_                  |
+| ProwlerRunCronExpression         | If _DoRunProwlerRegularly_ is _true_, then this parameter needs to be set with a [cron expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html). | "0 12 * * ? *" (12:00pm every day) |
 
 
 ```sh
-LambdaArtifactbucketName=...
 ProwlerCrossAccountAuditRoleName=...
 DoRunProwlerRegularly=...
 ProwlerRunCronExpression=...
 
-aws cloudformation package \
-  --template-file automation.template.yml \
-  --s3-bucket $LambdaArtifactbucketName \
-  --output-template-file .packaged-automation.template.yml \
-&& \
 aws cloudformation deploy \
   --template-file .packaged-automation.template.yml \
   --capabilities CAPABILITY_NAMED_IAM \
@@ -48,6 +41,7 @@ aws cloudformation deploy \
       ProwlerCrossAccountAuditRoleName=$ProwlerCrossAccountAuditRoleName \
       DoRunProwlerRegularly=$DoRunProwlerRegularly \
       ProwlerRunCronExpression=$ProwlerRunCronExpression
+
 ```
 
 Parameters:

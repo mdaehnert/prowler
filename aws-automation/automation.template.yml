@@ -108,34 +108,6 @@ Resources:
 # Feature: Prowler Step Function to handle parallel execution of runs inside multiple accounts.
 ##########
 
-  StartProwlerExecutionLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: prowler-automation-start-execution
-      CodeUri: ./lambda/01_start_execution/
-      Policies:
-      - Statement:
-        - Effect: Allow
-          Action: codebuild:StartBuild
-          Resource: !GetAtt ProwlerExecutionCodeBuild.Arn
-      Environment:
-        Variables:
-          CodeBuildProjectName: !Ref ProwlerExecutionCodeBuild
-
-  CheckProwlerExecutionStatusLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: prowler-automation-check-execution-status
-      CodeUri: ./lambda/02_check_execution_status/
-      Policies:
-      - Statement:
-        - Effect: Allow
-          Action: codebuild:BatchGetBuilds
-          Resource: !GetAtt ProwlerExecutionCodeBuild.Arn
-      Environment:
-        Variables:
-          CodeBuildProjectName: !Ref ProwlerExecutionCodeBuild
-
   ProwlerStepFunctionLooper:
     Type: AWS::StepFunctions::StateMachine
     Properties:
@@ -151,54 +123,21 @@ Resources:
               "MaxConcurrency": 10,
               "End": true,
               "Iterator": {
-                "StartAt": "Start prowler CodeBuild execution",
+                "StartAt": "Execute prowler CodeBuild",
                 "States": {
-                  "Start prowler CodeBuild execution": {
+                  "Execute prowler CodeBuild": {
                     "Type": "Task",
-                    "Resource": "${StartProwlerExecutionLambda.Arn}",
+                    "Resource": "arn:aws:states:::codebuild:startBuild.sync",
                     "Parameters": {
-                      "AccountId.$": "$.AccountId"
+                      "ProjectName": "${ProwlerExecutionCodeBuild}",
+                      "EnvironmentVariablesOverride": [
+                        {
+                          "Name": "RUNNING_ACCOUNT_ID",
+                          "Value.$": "$.AccountId"
+                        }
+                      ]
                     },
-                    "ResultPath": "$.Execution",
-                    "Next": "Prowler execution - Wait for 30 sec"
-                  },
-                  "Prowler execution - Wait for 30 sec": {
-                    "Type": "Wait",
-                    "Seconds": 30,
-                    "Next": "Check if prowler execution finished"
-                  },
-                  "Check if prowler execution finished": {
-                    "Type": "Task",
-                    "Resource": "${CheckProwlerExecutionStatusLambda.Arn}",
-                    "Parameters": {
-                      "BuildId.$": "$.Execution.BuildId"
-                    },
-                    "ResultPath": "$.ExecutionCheck",
-                    "Next": "Prowler execution complete?"
-                  },
-                  "Prowler execution complete?": {
-                    "Type": "Choice",
-                    "Choices": [
-                    {
-                      "Variable": "$.ExecutionCheck.Status",
-                      "StringEquals": "IN_PROGRESS",
-                      "Next": "Prowler execution - Wait for 30 sec"
-                    },
-                    {
-                      "Variable": "$.ExecutionCheck.Status",
-                      "StringEquals": "SUCCEEDED",
-                      "Next": "Prowler execution succeeded"
-                    }
-                    ],
-                    "Default": "Prowler execution failed"
-                  },
-                  "Prowler execution succeeded": {
-                    "Type": "Succeed"
-                  },
-                  "Prowler execution failed": {
-                    "Type": "Fail",
-                    "Error": "Prowler execution throw some error.",
-                    "Cause": " Please see CodeBuild execution logs for details."
+                    "End": true
                   }
                 }
               }
@@ -259,16 +198,26 @@ Resources:
           Principal:
             Service: !Sub "states.${AWS::Region}.amazonaws.com"
       Policies:
-      - PolicyName: root
+      - PolicyName: misc
         PolicyDocument:
           Version: 2012-10-17
           Statement:
-          - Action: lambda:InvokeFunction
-            Effect: Allow
-            Resource:
-            - !GetAtt StartProwlerExecutionLambda.Arn
-            - !GetAtt CheckProwlerExecutionStatusLambda.Arn
-
+          - Effect: Allow
+            Action:
+            - codebuild:StartBuild
+            - codebuild:StopBuild
+            Resource: !GetAtt ProwlerExecutionCodeBuild.Arn
+          - Effect: Allow
+            Action:
+            - codebuild:BatchGetBuilds
+            - codebuild:BatchGetReports
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - events:PutTargets
+              - events:PutRule
+              - events:DescribeRule
+            Resource: !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/StepFunctionsGetEventForCodeBuildStartBuildRule"
 
   ProwlerBuildAssumeRole:
     Type: AWS::IAM::Role
